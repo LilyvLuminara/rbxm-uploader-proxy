@@ -1,53 +1,17 @@
 // ============================================================
-// UPLOAD PROXY + POLLING OTOMATIS (Vercel)
+// UPLOAD PROXY UNTUK VERCEL - VERSI FINAL
 // ============================================================
 
 const FormData = require('form-data');
 const fetch = require('node-fetch');
 
-// ========== 🔑 KONFIGURASI ==========
-const API_KEY = process.env.ROBLOX_API_KEY || "0IdRZYmd30Ow/GuvH4Di2+qR8b3c/1Qo4h5vAj2K56tuedzmZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SWpCSlpGSmFXVzFrTXpCUGR5OUhkWFpJTkVScE1pdHhVamhpTTJNdk1WRnZOR2cxZGtGcU1rczFOblIxWldSNmJTSXNJbTkzYm1WeVNXUWlPaUk0TXpnd05EZ3pNRGs0SWl3aVpYaHdJam94TnpnME5EWTNOemcyTENKcFlYUWlPakUzT0RRME5qUXhPRFlzSW01aVppSTZNVGM0TkRRMk5ERTRObjAuRXJJcE1MZmdFVG9DRTNHeFh5TDMwRVlFMmQ5c1lJS2pyWkpVTEg5eU5GZ1BYcmMwY3ZVWW5RbmtsR0tmS0V1emVwS0hjc3IwSHh5QWZpTE1RRlNmcG50YmlkV1d2WDZYZmtVX05adVF2TDN0NXZ5ZUx2MktMWHQtWGpfOWVWVjBVTC0tNXY0Z01IQjc0VjR5QXJaZ2hJRUMxbHRsWFdfRVdTREhWNmI1dV9iZDQ2a2F2d09VcUQyMDBfT0d4Y0xRZVZTd2pDb2ZBdmNDdFljMXZ2TVF6LUY5bWJKX3BUektESnVYNWNERXoyTjI5VXp4MGxnVG1DRmhHQS0ybVBrTUl6NUFyUVdLNUwyR19iMktDa1E5Z215QWQ2TjlsMWxwbUJ2N0lubGFremFGSHVTZHhyVHR3UFNsSjZQZDFFUkFSZUVUNktDTkNJSGtBbjlsYWhVcG1n";
+// ========== 🔑 API KEY DARI ENVIRONMENT VARIABLE ==========
+const API_KEY = process.env.ROBLOX_API_KEY;
 const CREATOR_ID = parseInt(process.env.CREATOR_ID || "8380483098");
 const CREATOR_TYPE = process.env.CREATOR_TYPE || "user";
 
-// ========== FUNGSI POLLING ==========
-async function pollOperation(operationId, maxAttempts = 30) {
-    for (let i = 0; i < maxAttempts; i++) {
-        console.log(`⏳ Polling attempt ${i + 1}/${maxAttempts}...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+// ============================================================
 
-        try {
-            const response = await fetch(`https://apis.roblox.com/cloud/v2/operations/${operationId}`, {
-                headers: { 'x-api-key': API_KEY }
-            });
-
-            const data = await response.json();
-            console.log(`📊 Polling response: ${JSON.stringify(data)}`);
-
-            if (data && data.done === true) {
-                if (data.response && data.response.assetId) {
-                    return data.response.assetId;
-                }
-                if (data.result && data.result.assetId) {
-                    return data.result.assetId;
-                }
-                if (data.assetId) {
-                    return data.assetId;
-                }
-                // Cek error
-                if (data.errors && data.errors.length > 0) {
-                    throw new Error(data.errors[0].message || 'Operation failed');
-                }
-            }
-        } catch (e) {
-            console.error('Polling error:', e.message);
-            // Lanjut polling
-        }
-    }
-    return null;
-}
-
-// ========== HANDLER UTAMA ==========
 export default async function handler(req, res) {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -62,11 +26,23 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
+    // Validasi API Key
+    if (!API_KEY) {
+        console.error('❌ API_KEY tidak ditemukan di environment variables');
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Server configuration error: API_KEY missing' 
+        });
+    }
+
     try {
-        const { fileData, fileName } = req.body;
+        const { fileData, fileName, assetName, description } = req.body;
 
         if (!fileData) {
-            return res.status(400).json({ error: 'fileData is required' });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'fileData is required' 
+            });
         }
 
         // Clean Base64
@@ -74,29 +50,39 @@ export default async function handler(req, res) {
         const fileBuffer = Buffer.from(cleanBase64, 'base64');
 
         if (fileBuffer.length < 10) {
-            return res.status(400).json({ error: `File terlalu kecil: ${fileBuffer.length} bytes` });
+            return res.status(400).json({ 
+                success: false, 
+                error: `File terlalu kecil atau corrupt. Size: ${fileBuffer.length} bytes` 
+            });
         }
 
         console.log(`📤 Uploading: ${fileName || 'model.rbxm'}`);
         console.log(`📦 Size: ${fileBuffer.length} bytes`);
         console.log(`👤 Creator: ${CREATOR_TYPE} ${CREATOR_ID}`);
 
-        // ========== STEP 1: UPLOAD ==========
+        // ========== BUILD FORM DATA ==========
         const form = new FormData();
+        
         const assetMetadata = {
-            creator: { type: CREATOR_TYPE, id: CREATOR_ID },
+            creator: {
+                type: CREATOR_TYPE,
+                id: CREATOR_ID
+            },
             assetType: 'Model',
-            displayName: fileName || `Model_${Date.now()}`,
-            description: 'Uploaded from Delta via Vercel Proxy'
+            displayName: assetName || fileName || `Model_${Date.now()}`,
+            description: description || 'Uploaded from Delta via Vercel Proxy'
         };
-
+        
         form.append('request', JSON.stringify(assetMetadata));
         form.append('fileContent', fileBuffer, {
             filename: fileName || 'model.rbxm',
             contentType: 'model/x-rbxm'
         });
 
-        const uploadResponse = await fetch('https://apis.roblox.com/cloud/v2/assets', {
+        console.log('⏳ Sending to Roblox API...');
+
+        // ========== KIRIM KE ROBLOX ==========
+        const response = await fetch('https://apis.roblox.com/cloud/v2/assets', {
             method: 'POST',
             headers: {
                 'x-api-key': API_KEY,
@@ -105,59 +91,121 @@ export default async function handler(req, res) {
             body: form
         });
 
-        const uploadData = await uploadResponse.json();
-        console.log('📄 Upload response:', JSON.stringify(uploadData));
-
-        if (!uploadResponse.ok) {
-            throw new Error(uploadData.message || `Roblox API error: ${uploadResponse.status}`);
+        // ========== HANDLE RESPONSE ==========
+        const responseText = await response.text();
+        let data;
+        
+        try {
+            data = JSON.parse(responseText);
+        } catch {
+            throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
         }
 
-        // ========== STEP 2: CEK APAKAH ADA ASSET ID LANGSUNG ==========
-        if (uploadData.assetId) {
-            console.log(`✅ Asset ID langsung: ${uploadData.assetId}`);
-            return res.status(200).json({
-                success: true,
-                assetId: uploadData.assetId,
-                message: 'Upload berhasil!'
-            });
+        console.log('📄 Raw Response:', JSON.stringify(data, null, 2));
+
+        // ========== CEK ERROR ==========
+        if (!response.ok) {
+            const errorMsg = data.message || data.error?.message || JSON.stringify(data);
+            console.error('❌ Roblox API error:', errorMsg);
+            throw new Error(`Roblox API error: ${errorMsg}`);
         }
 
-        // ========== STEP 3: CEK OPERATION ID (POLLING) ==========
-        if (uploadData.operationId) {
-            console.log(`⏳ Operation ID: ${uploadData.operationId}, mulai polling...`);
+        // ========== PROSES RESPONSE ==========
+        let assetId = null;
+        let operationId = null;
 
-            // Polling sampai selesai
-            const assetId = await pollOperation(uploadData.operationId);
+        // Cek berbagai kemungkinan format response
+        if (data && data.assetId) {
+            assetId = data.assetId;
+        } else if (data && data.data && data.data.assetId) {
+            assetId = data.data.assetId;
+        } else if (data && data.id) {
+            assetId = data.id;
+        } else if (data && data.operationId) {
+            operationId = data.operationId;
+            console.log(`⏳ Async upload, operationId: ${operationId}`);
+        }
 
-            if (assetId) {
-                console.log(`✅ Asset ID dari polling: ${assetId}`);
-                return res.status(200).json({
-                    success: true,
-                    assetId: assetId,
-                    operationId: uploadData.operationId,
-                    message: 'Upload berhasil! (via polling)'
-                });
-            } else {
-                return res.status(202).json({
-                    success: false,
-                    operationId: uploadData.operationId,
-                    message: 'Upload masih diproses, coba polling manual nanti.'
-                });
+        // ========== POLLING UNTUK ASYNC UPLOAD ==========
+        if (operationId) {
+            const result = await pollOperation(operationId);
+            
+            if (result && result.assetId) {
+                assetId = result.assetId;
+            } else if (result && result.id) {
+                assetId = result.id;
+            } else if (result && result.error) {
+                throw new Error(`Polling error: ${result.error.message}`);
             }
         }
 
-        // ========== STEP 4: FALLBACK ==========
-        return res.status(200).json({
-            success: true,
-            rawResponse: uploadData,
-            message: 'Upload berhasil! Cek asset di Creator Dashboard.'
-        });
+        // ========== RESPONSE FINAL ==========
+        if (assetId) {
+            console.log(`✅ Upload success! Asset ID: ${assetId}`);
+            return res.status(200).json({
+                success: true,
+                assetId: assetId.toString(),
+                operationId: operationId,
+                message: 'Model berhasil diupload!',
+                assetUrl: `https://www.roblox.com/library/${assetId}`
+            });
+        } else {
+            // Cek kasus khusus: response kosong tapi sukses
+            if (data.errors && data.errors[0] && data.errors[0].code === 0) {
+                console.log('⚠️ Upload sukses tapi tidak ada assetId di response.');
+                return res.status(200).json({
+                    success: true,
+                    assetId: null,
+                    message: 'Upload berhasil! Cek asset di Creator Dashboard.',
+                    rawResponse: data
+                });
+            }
+            
+            throw new Error(`Tidak ada assetId dalam response: ${JSON.stringify(data)}`);
+        }
 
     } catch (error) {
         console.error('❌ Error:', error.message);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             error: error.message || 'Internal server error'
         });
     }
+}
+
+// ========== FUNGSI POLLING UNTUK ASYNC UPLOAD ==========
+async function pollOperation(operationId, maxAttempts = 15) {
+    console.log(`🔄 Polling operation: ${operationId} (max ${maxAttempts} attempts)`);
+    
+    for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        try {
+            const response = await fetch(`https://apis.roblox.com/cloud/v2/operations/${operationId}`, {
+                headers: {
+                    'x-api-key': API_KEY
+                }
+            });
+            
+            const data = await response.json();
+            console.log(`📊 Polling attempt ${i + 1}/${maxAttempts}:`, JSON.stringify(data, null, 2));
+            
+            if (data && data.done) {
+                // Cek apakah ada error
+                if (data.error) {
+                    throw new Error(`Operation error: ${data.error.message || JSON.stringify(data.error)}`);
+                }
+                console.log('✅ Operation completed!');
+                return data.response || data.result || data;
+            }
+            
+            if (data && data.progress) {
+                console.log(`⏳ Progress: ${data.progress}%`);
+            }
+        } catch (error) {
+            console.log(`⚠️ Polling attempt ${i + 1} error:`, error.message);
+        }
+    }
+    
+    throw new Error(`Polling timeout after ${maxAttempts} attempts`);
 }
