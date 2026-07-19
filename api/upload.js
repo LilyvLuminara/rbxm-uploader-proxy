@@ -1,19 +1,18 @@
 // ============================================================
-// UPLOAD PROXY UNTUK VERCEL (FULL + API KEY)
+// UPLOAD PROXY UNTUK VERCEL (DENGAN API KEY BARU)
 // ============================================================
 
 const FormData = require('form-data');
 const fetch = require('node-fetch');
 
-// ========== 🔑 API KEY & CREATOR ID (SUDAH DIISI) ==========
-const API_KEY = "IxxHZgbWeUKnNnHcKbujDceXSM+oHzQmZt5utefCBpdAIFt6ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SWtsNGVFaGFaMkpYWlZWTGJrNXVTR05MWW5WcVJHTmxXRk5OSzI5SWVsRnRXblExZFhSbFprTkNjR1JCU1VaME5pSXNJbTkzYm1WeVNXUWlPaUk0TXpnd05EZ3pNRGs0SWl3aVpYaHdJam94TnpnME5EVTVOamsxTENKcFlYUWlPakUzT0RRME5UWXdPVFVzSW01aVppSTZNVGM0TkRRMU5qQTVOWDAuQXBMM2pCV190OVpKMnRHOEZyaWF4aEhvVU9PRmdkd3pNZE9GMG1lcGVsaHdadVZpZTdhZjIwaUMyRVppQ0Nvd2dQcVRvUEtWMERud2pxRG4yLU43Ny1oaHJfeDVYLWljOFJWS1ZiaEVVU2laS3J0a21QVHowQWpKSkwtYkg5UjdNMWU0dHNaVW4wQUZEX2ZKQTY5bndqakw4QXE5aWJZUkEtMGpJZVVUcXhrekZiRFloaFRTeWYtajdBXy1qSFlRcm95b0pCMEItS2c4dkx0Zzd4SHhkQUtVV0g5ZnM3QkxSaU5zZFFveWJraFpnd19BZFlUWHoxeW9OVlNxQWZZRkNKSHNqTkF2OEJUd1M1aFM3Mm9ZeDlNTzlDV1BDbGw5akcxT200U1RrMnIyV2lSbjhWNzFMbkVPWkI4ZVhsTkxtQXdnSFREb0NCSG9sLWtWYXlUWUt3";
+// ========== 🔑 API KEY BARU ==========
+const API_KEY = "ETxYe1E200yFSfSNtdvqfHKofOGRC4C+aDQKd9IzcUB1nqlHZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SWtWVWVGbGxNVVV5TURCNVJsTm1VMDUwWkhaeFpraExiMlpQUjFKRE5FTXJZVVJSUzJRNVNYcGpWVUl4Ym5Gc1NDSXNJbTkzYm1WeVNXUWlPaUk0TXpnd05EZ3pNRGs0SWl3aVpYaHdJam94TnpnME5EWTJPREEzTENKcFlYUWlPakUzT0RRME5qTXlNRGNzSW01aVppSTZNVGM0TkRRMk16SXdOMzAuS1o2UjR0SGloc1RsWHlldEF4aUo5b3YxOHdVTmRHX2dDTGg2OHllVzVWVm9OYVI0VmlfU093Z3BtOXV2OFpfUXBTVDBYbk1RSDBTYl9CcjhlZ2JSOGxja1gwR0c0OHl0Y3JoS2NMWGxVekFYbkFOcXJMRmluRWRXVXluSF80eDZ4WmJFZ21xUkVwSGFINWdYbVFvVExNOW1tNjFCMzlmUXp2cFRKckYwUnFNU0RNV3MxRFloX25ITDNjcGl5QkFCdmk2WHA0Y09Qd3J2OHFRMk9iOEQweWZheWc3NTM2THkxVXp6REszX0xoOExWQlhhN2FTSlZ6a2dXUXdpaWp1Z094SmRxdkl4cUhUbzdzU0hjdlVQOXN2Rl9YV1plY29nempjNDVtNGozSkIySjc1RDU5MkdKWVpKTXgtYjBKbUZRZkxZN19aTV82MVY2Z2RLZW01bVJB";
 const CREATOR_ID = 8380483098;
 const CREATOR_TYPE = "user";
 
 // ============================================================
 
 export default async function handler(req, res) {
-    // ========== CORS ==========
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -27,14 +26,12 @@ export default async function handler(req, res) {
     }
 
     try {
-        // ========== AMBIL DATA ==========
         const { fileData, fileName } = req.body;
 
         if (!fileData) {
             return res.status(400).json({ error: 'fileData is required' });
         }
 
-        // ========== KONVERSI BASE64 KE BUFFER ==========
         const cleanBase64 = fileData.replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
         const fileBuffer = Buffer.from(cleanBase64, 'base64');
 
@@ -46,7 +43,6 @@ export default async function handler(req, res) {
         console.log(`📦 Size: ${fileBuffer.length} bytes`);
         console.log(`👤 Creator: ${CREATOR_TYPE} ${CREATOR_ID}`);
 
-        // ========== BUILD FORM DATA ==========
         const form = new FormData();
         
         const assetMetadata = {
@@ -65,7 +61,6 @@ export default async function handler(req, res) {
             contentType: 'model/x-rbxm'
         });
 
-        // ========== KIRIM KE ROBLOX ==========
         console.log('⏳ Sending to Roblox API...');
         
         const response = await fetch('https://apis.roblox.com/cloud/v2/assets', {
