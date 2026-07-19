@@ -1,0 +1,9 @@
+{
+  "name": "rbxm-uploader-proxy",
+  "version": "1.0.0",
+  "description": "Upload .rbxm + polling otomatis",
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
