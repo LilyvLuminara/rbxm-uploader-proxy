@@ -4,6 +4,14 @@
   "description": "Proxy upload .rbxm ke Roblox Open Cloud",
   "main": "api/upload.js",
   "scripts": {
-    "dev": "vercel dev"
+    "dev": "vercel dev",
+    "start": "node api/upload.js"
+  },
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
   }
 }
