@@ -1,0 +1,9 @@
+{
+  "name": "rbxm-uploader-proxy",
+  "version": "1.0.0",
+  "description": "Proxy upload .rbxm ke Roblox Open Cloud",
+  "main": "api/upload.js",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
