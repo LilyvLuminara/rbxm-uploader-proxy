@@ -1,0 +1,9 @@
+{
+  "name": "rbxm-uploader-proxy",
+  "version": "1.0.0",
+  "description": "Upload RBXM to Roblox via Vercel",
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.6.7"
+  }
+}
