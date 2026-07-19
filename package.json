@@ -1,9 +1,10 @@
 {
   "name": "rbxm-uploader-proxy",
   "version": "1.0.0",
-  "description": "Upload .rbxm + polling otomatis",
+  "description": "Upload RBXM to Roblox via Vercel",
+  "main": "api/upload.js",
   "dependencies": {
     "form-data": "^4.0.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.6.7"
   }
 }
