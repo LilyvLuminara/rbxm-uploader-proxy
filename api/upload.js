@@ -1,5 +1,5 @@
 // ============================================================
-// UPLOAD PROXY UNTUK VERCEL - FIXED VERSION
+// UPLOAD PROXY UNTUK VERCEL - FINAL VERSION
 // ============================================================
 
 const FormData = require('form-data');
@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
 
     // Validasi API Key
     if (!API_KEY) {
-        console.error('❌ API_KEY tidak ditemukan di environment variables');
+        console.error('❌ API_KEY tidak ditemukan');
         return res.status(500).json({ 
             success: false, 
             error: 'Server configuration error: API_KEY missing' 
@@ -61,7 +61,6 @@ module.exports = async function handler(req, res) {
 
         console.log(`📤 Uploading: ${fileName || 'model.rbxm'}`);
         console.log(`📦 Size: ${fileBuffer.length} bytes`);
-        console.log(`👤 Creator: ${CREATOR_TYPE} ${CREATOR_ID}`);
 
         // ========== BUILD FORM DATA ==========
         const form = new FormData();
@@ -102,10 +101,10 @@ module.exports = async function handler(req, res) {
             data = JSON.parse(responseText);
         } catch (e) {
             console.error('❌ Failed to parse JSON:', responseText.substring(0, 500));
-            throw new Error(`Invalid JSON response from Roblox: ${responseText.substring(0, 200)}`);
+            throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
         }
 
-        console.log('📄 Raw Response:', JSON.stringify(data, null, 2));
+        console.log('📄 Response:', JSON.stringify(data, null, 2));
 
         // ========== CEK ERROR ==========
         if (!response.ok) {
@@ -118,7 +117,6 @@ module.exports = async function handler(req, res) {
         let assetId = null;
         let operationId = null;
 
-        // Cek berbagai kemungkinan format response
         if (data && data.assetId) {
             assetId = data.assetId;
         } else if (data && data.data && data.data.assetId) {
@@ -138,8 +136,6 @@ module.exports = async function handler(req, res) {
                 assetId = result.assetId;
             } else if (result && result.id) {
                 assetId = result.id;
-            } else if (result && result.error) {
-                throw new Error(`Polling error: ${result.error.message || JSON.stringify(result.error)}`);
             } else if (result && result.response && result.response.assetId) {
                 assetId = result.response.assetId;
             }
@@ -156,7 +152,6 @@ module.exports = async function handler(req, res) {
                 assetUrl: `https://www.roblox.com/library/${assetId}`
             });
         } else {
-            // Cek kasus khusus: response kosong tapi sukses
             if (data.errors && data.errors[0] && data.errors[0].code === 0) {
                 console.log('⚠️ Upload sukses tapi tidak ada assetId di response.');
                 return res.status(200).json({
@@ -172,18 +167,16 @@ module.exports = async function handler(req, res) {
 
     } catch (error) {
         console.error('❌ Error:', error.message);
-        console.error('❌ Stack:', error.stack);
         return res.status(500).json({
             success: false,
-            error: error.message || 'Internal server error',
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error.message || 'Internal server error'
         });
     }
 };
 
-// ========== FUNGSI POLLING UNTUK ASYNC UPLOAD ==========
+// ========== FUNGSI POLLING ==========
 async function pollOperation(operationId, maxAttempts = 15) {
-    console.log(`🔄 Polling operation: ${operationId} (max ${maxAttempts} attempts)`);
+    console.log(`🔄 Polling operation: ${operationId}`);
     
     for (let i = 0; i < maxAttempts; i++) {
         await new Promise(resolve => setTimeout(resolve, 3000));
@@ -196,23 +189,17 @@ async function pollOperation(operationId, maxAttempts = 15) {
             });
             
             const data = await response.json();
-            console.log(`📊 Polling attempt ${i + 1}/${maxAttempts}:`, JSON.stringify(data, null, 2));
+            console.log(`📊 Polling attempt ${i + 1}/${maxAttempts}`);
             
             if (data && data.done === true) {
-                // Cek apakah ada error
                 if (data.error) {
                     throw new Error(`Operation error: ${data.error.message || JSON.stringify(data.error)}`);
                 }
                 console.log('✅ Operation completed!');
                 return data.response || data.result || data;
             }
-            
-            if (data && data.progress !== undefined) {
-                console.log(`⏳ Progress: ${data.progress}%`);
-            }
         } catch (error) {
             console.log(`⚠️ Polling attempt ${i + 1} error:`, error.message);
-            // Jangan throw, lanjut polling
         }
     }
     
