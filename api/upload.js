@@ -1,275 +1,220 @@
--- ============================================================
--- UPLOAD MODEL LENGKAP UNTUK DELTA
--- ============================================================
+// ============================================================
+// UPLOAD PROXY UNTUK VERCEL - FIXED VERSION
+// ============================================================
 
-local HttpService = game:GetService("HttpService")
-local MarketplaceService = game:GetService("MarketplaceService")
-local Workspace = game:GetService("Workspace")
+const FormData = require('form-data');
+const fetch = require('node-fetch');
 
--- ========== KONFIGURASI ==========
-local PROXY_URL = "https://rbxm-uploader-proxy.vercel.app/api/upload" -- ✅ SUDAH PAKAI INI
-local TIMEOUT = 30
+// ========== 🔑 API KEY DARI ENVIRONMENT VARIABLE ==========
+const API_KEY = process.env.ROBLOX_API_KEY;
+const CREATOR_ID = parseInt(process.env.CREATOR_ID || "8380483098");
+const CREATOR_TYPE = process.env.CREATOR_TYPE || "user";
 
--- ============================================================
--- FUNGSI ENCODE
--- ============================================================
+// ============================================================
 
-local function encodeFileToBase64(filePath)
-    local file = io.open(filePath, "rb")
-    if not file then
-        return nil, "File tidak ditemukan: " .. filePath
-    end
-    
-    local content = file:read("*all")
-    file:close()
-    
-    local b64 = HttpService:Base64Encode(content)
-    return b64
-end
+module.exports = async function handler(req, res) {
+    // CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
--- ============================================================
--- FUNGSI UPLOAD
--- ============================================================
-
-local function uploadModel(filePath, assetName, description)
-    print("📤 Uploading model...")
-    
-    local fileData, err = encodeFileToBase64(filePath)
-    if not fileData then
-        return nil, err
-    end
-    
-    print("📦 File size: " .. #fileData .. " characters (base64)")
-    
-    local payload = {
-        fileData = fileData,
-        fileName = "model.rbxm",
-        assetName = assetName or "My Model " .. os.date("%Y-%m-%d %H:%M:%S"),
-        description = description or "Uploaded from Delta"
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
     }
-    
-    local success, response = pcall(function()
-        return HttpService:PostAsync(
-            PROXY_URL,
-            HttpService:JSONEncode(payload),
-            Enum.HttpContentType.ApplicationJson,
-            false,
-            {
-                ["Content-Type"] = "application/json"
+
+    if (req.method !== 'POST') {
+        return res.status(405).json({ 
+            success: false, 
+            error: 'Method Not Allowed' 
+        });
+    }
+
+    // Validasi API Key
+    if (!API_KEY) {
+        console.error('❌ API_KEY tidak ditemukan di environment variables');
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Server configuration error: API_KEY missing' 
+        });
+    }
+
+    try {
+        const { fileData, fileName, assetName, description } = req.body;
+
+        if (!fileData) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'fileData is required' 
+            });
+        }
+
+        // Clean Base64
+        const cleanBase64 = fileData.replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
+        const fileBuffer = Buffer.from(cleanBase64, 'base64');
+
+        if (fileBuffer.length < 10) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `File terlalu kecil atau corrupt. Size: ${fileBuffer.length} bytes` 
+            });
+        }
+
+        console.log(`📤 Uploading: ${fileName || 'model.rbxm'}`);
+        console.log(`📦 Size: ${fileBuffer.length} bytes`);
+        console.log(`👤 Creator: ${CREATOR_TYPE} ${CREATOR_ID}`);
+
+        // ========== BUILD FORM DATA ==========
+        const form = new FormData();
+        
+        const assetMetadata = {
+            creator: {
+                type: CREATOR_TYPE,
+                id: CREATOR_ID
+            },
+            assetType: 'Model',
+            displayName: assetName || fileName || `Model_${Date.now()}`,
+            description: description || 'Uploaded from Delta via Vercel Proxy'
+        };
+        
+        form.append('request', JSON.stringify(assetMetadata));
+        form.append('fileContent', fileBuffer, {
+            filename: fileName || 'model.rbxm',
+            contentType: 'model/x-rbxm'
+        });
+
+        console.log('⏳ Sending to Roblox API...');
+
+        // ========== KIRIM KE ROBLOX ==========
+        const response = await fetch('https://apis.roblox.com/cloud/v2/assets', {
+            method: 'POST',
+            headers: {
+                'x-api-key': API_KEY,
+                ...form.getHeaders()
+            },
+            body: form
+        });
+
+        // ========== HANDLE RESPONSE ==========
+        const responseText = await response.text();
+        let data;
+        
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error('❌ Failed to parse JSON:', responseText.substring(0, 500));
+            throw new Error(`Invalid JSON response from Roblox: ${responseText.substring(0, 200)}`);
+        }
+
+        console.log('📄 Raw Response:', JSON.stringify(data, null, 2));
+
+        // ========== CEK ERROR ==========
+        if (!response.ok) {
+            const errorMsg = data.message || data.error?.message || data.errors?.[0]?.message || JSON.stringify(data);
+            console.error('❌ Roblox API error:', errorMsg);
+            throw new Error(`Roblox API error: ${errorMsg}`);
+        }
+
+        // ========== PROSES RESPONSE ==========
+        let assetId = null;
+        let operationId = null;
+
+        // Cek berbagai kemungkinan format response
+        if (data && data.assetId) {
+            assetId = data.assetId;
+        } else if (data && data.data && data.data.assetId) {
+            assetId = data.data.assetId;
+        } else if (data && data.id) {
+            assetId = data.id;
+        } else if (data && data.operationId) {
+            operationId = data.operationId;
+            console.log(`⏳ Async upload, operationId: ${operationId}`);
+        }
+
+        // ========== POLLING UNTUK ASYNC UPLOAD ==========
+        if (operationId) {
+            const result = await pollOperation(operationId);
+            
+            if (result && result.assetId) {
+                assetId = result.assetId;
+            } else if (result && result.id) {
+                assetId = result.id;
+            } else if (result && result.error) {
+                throw new Error(`Polling error: ${result.error.message || JSON.stringify(result.error)}`);
+            } else if (result && result.response && result.response.assetId) {
+                assetId = result.response.assetId;
             }
-        )
-    end)
-    
-    if not success then
-        return nil, "Network error: " .. tostring(response)
-    end
-    
-    local data = HttpService:JSONDecode(response)
-    
-    if data.success then
-        print("✅ Upload success!")
-        print("📌 Asset ID: " .. data.assetId)
-        print("🔗 URL: " .. data.assetUrl)
-        return data
-    else
-        return nil, data.error or "Upload failed"
-    end
-end
+        }
 
--- ============================================================
--- FUNGSI LOAD
--- ============================================================
-
-local function loadAssetFromId(assetId)
-    if not assetId then
-        return nil, "Asset ID tidak valid"
-    end
-    
-    print("📥 Loading asset: " .. assetId)
-    
-    local id = tonumber(assetId)
-    if not id then
-        return nil, "Asset ID harus berupa angka"
-    end
-    
-    local success, result = pcall(function()
-        return MarketplaceService:LoadAsset(id)
-    end)
-    
-    if not success then
-        return nil, "Gagal load asset: " .. tostring(result)
-    end
-    
-    if not result or not result:IsA("Model") then
-        return nil, "Asset bukan model atau tidak valid"
-    end
-    
-    print("✅ Asset loaded successfully!")
-    return result
-end
-
-local function loadAndParent(assetId, parent)
-    parent = parent or Workspace
-    
-    local model, err = loadAssetFromId(assetId)
-    if not model then
-        return nil, err
-    end
-    
-    model.Parent = parent
-    print("✅ Model placed in " .. parent.Name)
-    
-    return model
-end
-
--- ============================================================
--- FUNGSI UPLOAD + LOAD OTOMATIS
--- ============================================================
-
-local function uploadAndLoad(filePath, assetName, parent)
-    parent = parent or Workspace
-    
-    print("🚀 Upload and load model...")
-    
-    local result, err = uploadModel(filePath, assetName)
-    if not result then
-        return nil, err
-    end
-    
-    print("⏳ Loading model from asset ID:", result.assetId)
-    
-    local model = loadAndParent(result.assetId, parent)
-    if not model then
-        return nil, "Failed to load model"
-    end
-    
-    print("✅ Model uploaded and loaded!")
-    return {
-        assetId = result.assetId,
-        model = model
-    }
-end
-
--- ============================================================
--- FUNGSI UPLOAD DENGAN RETRY
--- ============================================================
-
-local function uploadWithRetry(filePath, assetName, maxRetries)
-    maxRetries = maxRetries or 3
-    
-    for attempt = 1, maxRetries do
-        print(string.format("🔄 Attempt %d/%d", attempt, maxRetries))
-        
-        local result, err = uploadModel(filePath, assetName)
-        
-        if result then
-            return result
-        end
-        
-        print("⚠️ Attempt " .. attempt .. " failed:", err)
-        
-        if attempt < maxRetries then
-            print("⏳ Waiting 3 seconds before retry...")
-            wait(3)
-        end
-    end
-    
-    return nil, "All retries failed"
-end
-
--- ============================================================
--- FUNGSI UPLOAD DENGAN PROGRESS
--- ============================================================
-
-local function uploadWithProgress(filePath, assetName, description, progressCallback)
-    print("📤 Starting upload...")
-    
-    local fileData, err = encodeFileToBase64(filePath)
-    if not fileData then
-        return nil, err
-    end
-    
-    print("📦 Size: " .. #fileData .. " chars")
-    
-    if progressCallback then
-        progressCallback(10, "Encoding complete")
-    end
-    
-    local payload = {
-        fileData = fileData,
-        fileName = "model.rbxm",
-        assetName = assetName or "My Model " .. os.date("%Y-%m-%d %H:%M:%S"),
-        description = description or "Uploaded from Delta"
-    }
-    
-    if progressCallback then
-        progressCallback(30, "Sending to server...")
-    end
-    
-    local startTime = tick()
-    local success, response = pcall(function()
-        return HttpService:PostAsync(
-            PROXY_URL,
-            HttpService:JSONEncode(payload),
-            Enum.HttpContentType.ApplicationJson,
-            false,
-            {
-                ["Content-Type"] = "application/json",
-                ["Timeout"] = TIMEOUT
+        // ========== RESPONSE FINAL ==========
+        if (assetId) {
+            console.log(`✅ Upload success! Asset ID: ${assetId}`);
+            return res.status(200).json({
+                success: true,
+                assetId: assetId.toString(),
+                operationId: operationId,
+                message: 'Model berhasil diupload!',
+                assetUrl: `https://www.roblox.com/library/${assetId}`
+            });
+        } else {
+            // Cek kasus khusus: response kosong tapi sukses
+            if (data.errors && data.errors[0] && data.errors[0].code === 0) {
+                console.log('⚠️ Upload sukses tapi tidak ada assetId di response.');
+                return res.status(200).json({
+                    success: true,
+                    assetId: null,
+                    message: 'Upload berhasil! Cek asset di Creator Dashboard.',
+                    rawResponse: data
+                });
             }
-        )
-    end)
+            
+            throw new Error(`Tidak ada assetId dalam response: ${JSON.stringify(data)}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+        console.error('❌ Stack:', error.stack);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
+
+// ========== FUNGSI POLLING UNTUK ASYNC UPLOAD ==========
+async function pollOperation(operationId, maxAttempts = 15) {
+    console.log(`🔄 Polling operation: ${operationId} (max ${maxAttempts} attempts)`);
     
-    if not success then
-        return nil, "Network error: " .. tostring(response)
-    end
-    
-    if progressCallback then
-        progressCallback(70, "Processing...")
-    end
-    
-    local data = HttpService:JSONDecode(response)
-    
-    if data.success then
-        if progressCallback then
-            progressCallback(100, "Complete!")
-        end
+    for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
-        local elapsed = math.floor(tick() - startTime)
-        print("⏱️ Completed in " .. elapsed .. " seconds")
-        print("✅ Asset ID: " .. data.assetId)
-        
-        return data
-    else
-        return nil, data.error or "Upload failed"
-    end
-end
-
--- ============================================================
--- 🔥 EKSEKUSI: UPLOAD + LOAD OTOMATIS
--- ============================================================
-
-print("========================================")
-print("🚀 STARTING UPLOAD + LOAD")
-print("========================================")
-
-local result = uploadAndLoad("model.rbxm", "Nama Model")
-if result then
-    print("========================================")
-    print("✅ SUCCESS!")
-    print("📌 Asset ID:", result.assetId)
-    print("📦 Model:", result.model.Name)
-    print("👶 Children:", #result.model:GetChildren())
-    print("========================================")
+        try {
+            const response = await fetch(`https://apis.roblox.com/cloud/v2/operations/${operationId}`, {
+                headers: {
+                    'x-api-key': API_KEY
+                }
+            });
+            
+            const data = await response.json();
+            console.log(`📊 Polling attempt ${i + 1}/${maxAttempts}:`, JSON.stringify(data, null, 2));
+            
+            if (data && data.done === true) {
+                // Cek apakah ada error
+                if (data.error) {
+                    throw new Error(`Operation error: ${data.error.message || JSON.stringify(data.error)}`);
+                }
+                console.log('✅ Operation completed!');
+                return data.response || data.result || data;
+            }
+            
+            if (data && data.progress !== undefined) {
+                console.log(`⏳ Progress: ${data.progress}%`);
+            }
+        } catch (error) {
+            console.log(`⚠️ Polling attempt ${i + 1} error:`, error.message);
+            // Jangan throw, lanjut polling
+        }
+    }
     
-    -- Opsional: atur posisi model
-    if result.model:IsA("Model") and result.model:FindFirstChild("HumanoidRootPart") then
-        result.model:SetPrimaryPartCFrame(CFrame.new(0, 10, 0))
-        print("📍 Model positioned at 0, 10, 0")
-    end
-else
-    print("========================================")
-    print("❌ FAILED!")
-    print("Error:", err)
-    print("========================================")
-end
+    throw new Error(`Polling timeout after ${maxAttempts} attempts`);
+}
